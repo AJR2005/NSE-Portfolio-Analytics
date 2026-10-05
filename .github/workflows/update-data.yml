@@ -1,0 +1,28 @@
+name: Update NSE price snapshot
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 13 2 * *"  # 19:00 IST on the 2nd of each month, after the market close
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python scripts/fetch_data.py
+      - name: Commit snapshot if it changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/nse_prices.csv
+          git diff --cached --quiet || git commit -m "Update NSE price snapshot"
+          git push
