@@ -7,6 +7,44 @@ ways, backtests those VaR models with the tests regulators use, and optimises an
 > Real NSE prices (dividend- and split-adjusted) for 2019 onwards are bundled in `data/nse_prices.csv` and refreshed
 > monthly by a GitHub Action, so the dashboard works offline. Live Yahoo Finance prices are one toggle away.
 
+![Overview](docs/screenshots/overview-light.png)
+
+## Key results
+
+Default basket: eight Nifty 50 large caps at 8% each, Nippon Nifty 50 ETF (NIFTYBEES) 20% and Nippon Gold ETF
+(GOLDBEES) 16%, rebalanced monthly, risk-free rate 6.5%. Data as of 5 Oct 2026.
+
+| | Jan 2019 – Oct 2026 | | Oct 2021 – Oct 2026 | |
+| --- | --- | --- | --- | --- |
+| | **Portfolio** | **Nifty 50** | **Portfolio** | **Nifty 50** |
+| CAGR | 14.9% | 10.2% | 9.7% | 4.9% |
+| Annual volatility | 14.2% | 17.3% | 11.9% | 13.8% |
+| Sharpe ratio | 0.59 | 0.27 | 0.29 | −0.05 |
+| Max drawdown | −30.7% | −38.4% | −16.1% | −17.2% |
+| Beta | 0.78 | 1 | 0.80 | 1 |
+| 1-day 99% historical VaR | 2.38% | | 1.91% | |
+
+- **Normal VaR fails its backtest.** Over 1,669 out-of-sample days, 99% parametric VaR was breached 33 times against
+  16.7 expected: Kupiec rejects it (p < 0.001) and the breaches cluster (Christoffersen p = 0.03), mostly in the
+  March 2020 crash. Historical VaR (22 breaches, p = 0.21) and Cornish-Fisher VaR (16, p = 0.86) pass.
+- **Fat tails.** Full-period daily returns have excess kurtosis of 16, so the normal distribution understates the
+  99% loss (2.02% vs 2.38% historical).
+- **Gold is the diversifier.** GOLDBEES has a correlation of about 0.05 with the equities. Over the full period it is
+  16% of the money but under 5% of the portfolio's VaR, while Larsen & Toubro carries about 11% of the risk on an
+  8% weight.
+- **Stress tests.** Through the COVID crash the portfolio fell 30.3% against 37.2% for the Nifty 50, and recovered
+  its previous peak in 80 trading days.
+
+The Nifty 50 here is the price index (Yahoo `^NSEI`), which excludes dividends of roughly 1.2–1.5% a year, while
+stock and ETF prices are dividend-adjusted, so the comparison flatters the portfolio slightly. NIFTYBEES is the
+total-return proxy inside the portfolio.
+
+| VaR backtest | Stress tests |
+| --- | --- |
+| ![VaR backtest](docs/screenshots/backtest-light.png) | ![Stress tests](docs/screenshots/stress-light.png) |
+| **Risk & VaR** | **Optimiser** |
+| ![Risk](docs/screenshots/risk-light.png) | ![Optimiser](docs/screenshots/optimiser-light.png) |
+
 ## Run it
 
 ```bash
@@ -90,6 +128,8 @@ tests/                       metric, VaR, backtest, optimiser and dashboard test
 - Historical and Monte Carlo VaR assume the past window is representative; volatility regimes change.
 - Monte Carlo uses a multivariate normal; a Student-t or filtered historical simulation would capture tails better.
 - Optimised weights are fitted and evaluated on the same data, so their statistics are optimistic.
-- Yahoo Finance data can contain gaps; tickers with less than 90% coverage over the period are dropped and noted.
+- Yahoo Finance data has glitches. For example, it shows NIFTYBEES, BANKBEES and GOLDBEES at a tenth or a
+  hundredth of their price on 19–20 Dec 2019; `remove_bad_ticks` blanks any quote more than 40% from its 11-day
+  median and forward-fills it. Tickers with less than 90% coverage over the period are dropped and noted.
 
 *For education and analysis only, not investment advice.*

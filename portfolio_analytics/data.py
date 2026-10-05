@@ -53,6 +53,7 @@ class PriceData:
     prices: pd.DataFrame  # adjusted close, one column per ticker, trading days as index
     source: str
     dropped: list[str] = field(default_factory=list)  # tickers with no usable data
+    repaired: dict[str, int] = field(default_factory=dict)  # bad ticks removed, per ticker
 
 
 def download(tickers: list[str], start: str, end: str | None = None) -> pd.DataFrame:
@@ -72,7 +73,18 @@ def load_snapshot() -> pd.DataFrame:
     return df.sort_index()
 
 
-def clean(prices: pd.DataFrame, min_coverage: float = 0.9) -> tuple[pd.DataFrame, list[str]]:
+def remove_bad_ticks(prices: pd.DataFrame, tolerance: float = 0.4) -> tuple[pd.DataFrame, dict[str, int]]:
+    """Blanks out isolated bad quotes, e.g. Yahoo showing an ETF at 1/10th or 1/100th of its price for a
+    couple of days around a split. A price more than 40% away from the median of the surrounding
+    11 days cannot be real for a large-cap or ETF (NSE price bands and index circuit breakers stop that),
+    while a genuine crash moves the median along with it."""
+    median = prices.rolling(11, center=True, min_periods=3).median()
+    bad = ((prices / median - 1).abs() > tolerance) & prices.notna()
+    counts = {c: int(n) for c, n in bad.sum().items() if n}
+    return prices.mask(bad), counts
+
+
+def clean(prices: pd.DataFrame, min_coverage: float = 0.9) -> tuple[pd.DataFrame, list[str], dict[str, int]]:
     """Aligns tickers on common trading days.
 
     Stock and index holidays differ slightly, so small gaps are forward-filled (a missing day = no
@@ -80,10 +92,14 @@ def clean(prices: pd.DataFrame, min_coverage: float = 0.9) -> tuple[pd.DataFrame
     shortening every other series.
     """
     prices = prices.dropna(how="all")
+    # Rows where most tickers have no price are exchange holidays with a stray quote for one or two
+    # instruments; keeping them would insert fake zero-return days for everything else.
+    prices = prices.loc[prices.notna().mean(axis=1) >= 0.5]
+    prices, repaired = remove_bad_ticks(prices)
     coverage = prices.notna().mean()
     dropped = coverage[coverage < min_coverage].index.tolist()
     prices = prices.drop(columns=dropped).ffill(limit=5).dropna()
-    return prices, dropped
+    return prices, dropped, repaired
 
 
 def load_prices(tickers: list[str], start: str, end: str | None = None, live: bool = True) -> PriceData:
@@ -107,6 +123,6 @@ def load_prices(tickers: list[str], start: str, end: str | None = None, live: bo
             prices = fill if prices.empty else prices.join(fill, how="outer")
             source = "snapshot" if source == "snapshot" or len(have) == len(tickers) else "live + snapshot"
     cols = [t for t in tickers if t in prices.columns]
-    cleaned, dropped = clean(prices[cols]) if cols else (pd.DataFrame(), [])
+    cleaned, dropped, repaired = clean(prices[cols]) if cols else (pd.DataFrame(), [], {})
     dropped += [t for t in tickers if t not in cols]
-    return PriceData(cleaned, source, dropped)
+    return PriceData(cleaned, source, dropped, repaired)

@@ -197,7 +197,7 @@ with tabs[1]:
     with c1:
         contrib = risk.risk_contributions(asset_r, target, confidence).rename(index=names)
         st.plotly_chart(charts.risk_vs_weight(contrib), **PLOT)
-        top = contrib.index[0]
+        top = (contrib["Risk contribution"] / contrib["Weight"].where(contrib["Weight"] > 0)).idxmax()
         st.caption(f"Euler decomposition of {conf_txt} parametric VaR: components add up to the total. "
                    f"{top} is {contrib.loc[top, 'Weight']:.0%} of the money but "
                    f"{contrib.loc[top, 'Risk contribution']:.0%} of the risk.")
@@ -221,10 +221,10 @@ with tabs[2]:
         m[1].metric("Exceptions", bt.exceptions, f"{bt.exceptions - bt.expected:+.1f} vs {bt.expected:.1f} expected",
                     delta_color="inverse")
         m[2].metric("Kupiec p-value", f"{bt.kupiec_p:.3f}", "pass" if bt.kupiec_p > 0.05 else "reject",
-                    delta_color="normal" if bt.kupiec_p > 0.05 else "inverse")
+                    delta_color="normal" if bt.kupiec_p > 0.05 else "inverse", delta_arrow="off")
         m[3].metric("Christoffersen p-value", f"{bt.christoffersen_p:.3f}",
                     "independent" if bt.christoffersen_p > 0.05 else "clustered",
-                    delta_color="normal" if bt.christoffersen_p > 0.05 else "inverse")
+                    delta_color="normal" if bt.christoffersen_p > 0.05 else "inverse", delta_arrow="off")
         light = {"green": "🟢 Green", "yellow": "🟡 Yellow", "red": "🔴 Red"}.get(bt.traffic_light, "n/a")
         last = int(bt.series["Exception"].iloc[-250:].sum())
         m[4].metric("Basel traffic light", light, f"{last} in last 250 days" if bt.traffic_light else "99% only",
@@ -346,6 +346,9 @@ with tabs[6]:
                        .to_csv().encode(), "daily_returns.csv", "text/csv")
     if data.dropped:
         st.caption(f"Dropped for insufficient history: {', '.join(data.dropped)}")
+    if data.repaired:
+        st.caption("Bad quotes removed and forward-filled: "
+                   + ", ".join(f"{label(t)} ({n} day{'s' if n > 1 else ''})" for t, n in data.repaired.items()))
 
 st.divider()
 st.caption("For education and analysis only, not investment advice. Prices are dividend- and split-adjusted closes.")

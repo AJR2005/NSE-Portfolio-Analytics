@@ -56,13 +56,15 @@ def return_distribution(r: pd.Series, var_lines: dict[str, float]) -> go.Figure:
     fig = go.Figure(go.Histogram(x=r, nbinsx=120, marker_color=BLUE, opacity=0.75, name="Daily returns",
                                  hovertemplate="%{x:.2%}: %{y} days<extra></extra>"))
     colours = [AMBER, RED, "#7a1f1f", GREY]
-    for i, ((name, v), c) in enumerate(zip(var_lines.items(), colours)):
+    for (name, v), c in zip(var_lines.items(), colours):
         fig.add_vline(x=-v, line=dict(color=c, width=2, dash="dash"))
-        fig.add_annotation(x=-v, y=0.98 - 0.09 * i, yref="paper", text=f"{name}: {v:.2%}", showarrow=False,
-                           xanchor="right", xshift=-4, font=dict(color=c, size=12))
+        # Empty trace so each threshold gets a legend entry instead of a label over the bars
+        fig.add_scatter(x=[None], y=[None], mode="lines", name=f"{name}: {v:.2%}",
+                        line=dict(color=c, width=2, dash="dash"))
     fig.update_xaxes(tickformat=".1%", range=[r.quantile(0.0005) * 1.3, r.quantile(0.9995) * 1.3])
+    fig.data[0].showlegend = False
     return _layout(fig, "Distribution of daily portfolio returns", y_pct=False).update_layout(
-        hovermode="closest", showlegend=False, bargap=0.02)
+        hovermode="closest", bargap=0.02)
 
 
 def risk_vs_weight(contrib: pd.DataFrame) -> go.Figure:
@@ -120,6 +122,9 @@ def frontier(front: pd.DataFrame, points: dict[str, dict], assets: pd.DataFrame)
         fig.add_scatter(x=[s["Volatility"]], y=[s["Expected return"]], mode="markers", name=name,
                         marker=dict(size=14, color=colours.get(name, BLUE), line=dict(color="white", width=1.5),
                                     symbol="star" if name == "Your portfolio" else "circle"))
+    ys = list(assets["Expected return"]) + list(front["Expected return"]) + [s["Expected return"] for s in points.values()]
+    pad = (max(ys) - min(ys)) * 0.08
+    fig.update_yaxes(range=[min(ys) - pad, max(ys) + pad])
     fig.update_xaxes(tickformat=".0%", title="Annual volatility")
     fig.update_yaxes(title="Expected annual return")
     return _layout(fig, "Efficient frontier (in-sample)", height=460).update_layout(hovermode="closest")
